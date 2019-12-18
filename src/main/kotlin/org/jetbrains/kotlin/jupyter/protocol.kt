@@ -390,3 +390,5 @@ fun JupyterConnection.evalWithIO(maybeConfig: OutputConfig?, body: () -> EvalRes
         System.setOut(out)
     }
 }
+
+fun String.nullWhenEmpty(): String? = if (this.isBlank()) null else this
