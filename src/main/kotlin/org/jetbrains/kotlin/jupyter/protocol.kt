@@ -115,8 +115,8 @@ fun JupyterConnection.Socket.shellMessagesHandler(msg: Message, repl: ReplForJup
             val res: Response = if (isCommand(code.toString())) {
                 runCommand(code.toString(), repl)
             } else {
-                connection.evalWithIO (repl?.outputConfig) {
-                    repl?.eval(code.toString(), count.toInt())
+                connection.evalWithIO(repl!!.outputConfig) {
+                    repl!!.eval(code.toString(), count.toInt())
                 }
             }
 
@@ -299,7 +299,6 @@ fun Any.toMimeTypedResult(): MimeTypedResult? = when (this) {
 fun JupyterConnection.evalWithIO(maybeConfig: OutputConfig?, body: () -> EvalResult?): Response {
     val out = System.out
     val err = System.err
-    val config = maybeConfig ?: OutputConfig()
 
     fun getCapturingStream(stream: PrintStream, outType: JupyterOutType, captureOutput: Boolean): CapturingOutputStream {
         return CapturingOutputStream(
