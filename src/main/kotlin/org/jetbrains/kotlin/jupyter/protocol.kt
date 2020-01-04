@@ -1,7 +1,6 @@
 package org.jetbrains.kotlin.jupyter
 
 import com.beust.klaxon.JsonObject
-import jupyter.kotlin.DisplayResult
 import jupyter.kotlin.MimeTypedResult
 import jupyter.kotlin.textResult
 import org.jetbrains.annotations.TestOnly
@@ -10,7 +9,6 @@ import java.io.ByteArrayOutputStream
 import java.io.OutputStream
 import java.io.PrintStream
 import java.lang.reflect.InvocationTargetException
-import java.util.*
 import java.util.concurrent.atomic.AtomicLong
 import kotlin.concurrent.timer
 
@@ -32,7 +30,6 @@ interface Response {
 }
 
 data class OkResponseWithMessage(val result: MimeTypedResult?,
-                                 val displays: List<MimeTypedResult> = emptyList(),
                                  override val stdOut: String? = null,
                                  override val stdErr: String? = null): Response{
     override val state: ResponseState = ResponseState.Ok
@@ -149,14 +146,6 @@ fun JupyterConnection.Socket.shellMessagesHandler(msg: Message, repl: ReplForJup
                                         "execution_count" to count,
                                         "data" to res.result,
                                         "metadata" to metadata
-                                )))
-                    }
-                    res.displays.forEach {
-                        connection.iopub.send(makeReplyMessage(msg,
-                                "display_data",
-                                content = jsonObject(
-                                        "data" to it,
-                                        "metadata" to jsonObject()
                                 )))
                     }
 
@@ -305,7 +294,6 @@ class CapturingOutputStream(private val stdout: PrintStream,
 fun Any.toMimeTypedResult(): MimeTypedResult? = when (this) {
     is MimeTypedResult -> this
     is Unit -> null
-    is DisplayResult -> value.toMimeTypedResult()
     else -> textResult(this.toString())
 }
 
@@ -341,13 +329,8 @@ fun JupyterConnection.evalWithIO(maybeConfig: OutputConfig?, body: () -> EvalRes
 
                 try {
                     var result: MimeTypedResult? = null
-                    val displays = exec.displayValues.mapNotNull { it.toMimeTypedResult() }.toMutableList()
-                    if (exec.resultValue is DisplayResult) {
-                        val resultDisplay = exec.resultValue.value.toMimeTypedResult()
-                        if (resultDisplay != null)
-                            displays += resultDisplay
-                    } else result = exec.resultValue?.toMimeTypedResult()
-                    OkResponseWithMessage(result, displays, null, null)
+                    result = exec.resultValue?.toMimeTypedResult()
+                    OkResponseWithMessage(result, null, null)
                 } catch (e: Exception) {
                     AbortResponseWithMessage(textResult("Error!"), "error:  Unable to convert result to a string: $e")
                 }
