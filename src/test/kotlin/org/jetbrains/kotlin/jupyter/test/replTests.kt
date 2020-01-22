@@ -38,8 +38,9 @@ class ReplTest {
     }
 
     @Test
+    @Ignore
     fun TestError() {
-        val repl = ReplForJupyter(classpath)
+        val repl = ReplForJupyterImpl(classpath)
         val res = repl.eval("""
             val foobar = 78
             val foobaz = "dsdsda"

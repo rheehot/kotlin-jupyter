@@ -1,6 +1,6 @@
 package org.jetbrains.kotlin.jupyter
 
-import jupyter.kotlin.completion.KotlinFunctionInfo
+import jupyter.kotlin.KotlinFunctionInfo
 import org.jetbrains.kotlin.jupyter.repl.reflect.ContextUpdater
 
 interface AnnotationsProcessor {

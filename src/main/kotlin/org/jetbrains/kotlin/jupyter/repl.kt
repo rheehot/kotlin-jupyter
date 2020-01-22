@@ -1,8 +1,6 @@
 package org.jetbrains.kotlin.jupyter
 
 import jupyter.kotlin.*
-import jupyter.kotlin.completion.KotlinContext
-import jupyter.kotlin.completion.KotlinReceiver
 import org.jetbrains.kotlin.cli.common.messages.CompilerMessageLocation
 import org.jetbrains.kotlin.cli.common.repl.*
 import org.jetbrains.kotlin.config.KotlinCompilerVersion
@@ -269,19 +267,13 @@ class ReplForJupyterImpl(val scriptClasspath: List<File> = emptyList(),
 
     private val completer = KotlinCompleter()
 
-    private val ctx = KotlinContext()
-
     private val contextUpdater = ContextUpdater(state, ctx)
 
     private val typeProvidersProcessor: TypeProvidersProcessor = TypeProvidersProcessorImpl(contextUpdater)
 
     private val annotationsProcessor: AnnotationsProcessor = AnnotationsProcessorImpl(contextUpdater)
 
-    var trackClasspath: Boolean = false
-
     var trackExecutedCode: Boolean = false
-
-    var classWriter: ClassWriter? = null
 
     private var currentDisplayHandler: ((Any) -> Unit)? = null
 

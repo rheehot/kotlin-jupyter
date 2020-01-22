@@ -124,7 +124,7 @@ fun JupyterConnection.Socket.shellMessagesHandler(msg: Message, repl: ReplForJup
                 runCommand(code.toString(), repl)
             } else {
                 connection.evalWithIO(repl!!.outputConfig) {
-                    repl!!.eval(code.toString(), ::displayHandler, count.toInt())
+                    repl.eval(code.toString(), ::displayHandler, count.toInt())
                 }
             }
 
@@ -297,20 +297,20 @@ fun Any.toMimeTypedResult(): MimeTypedResult? = when (this) {
     else -> textResult(this.toString())
 }
 
-fun JupyterConnection.evalWithIO(maybeConfig: OutputConfig?, body: () -> EvalResult?): Response {
+fun JupyterConnection.evalWithIO(outputConfig: OutputConfig, body: () -> EvalResult?): Response {
     val out = System.out
     val err = System.err
 
     fun getCapturingStream(stream: PrintStream, outType: JupyterOutType, captureOutput: Boolean): CapturingOutputStream {
         return CapturingOutputStream(
                 stream,
-                config,
+                outputConfig,
                 captureOutput) { text ->
             this.iopub.sendOut(contextMessage!!, outType, text)
         }
     }
 
-    val forkedOut = getCapturingStream(out, JupyterOutType.STDOUT, config.captureOutput)
+    val forkedOut = getCapturingStream(out, JupyterOutType.STDOUT, outputConfig.captureOutput)
     val forkedError = getCapturingStream(err, JupyterOutType.STDERR, false)
 
     System.setOut(PrintStream(forkedOut, false, "UTF-8"))

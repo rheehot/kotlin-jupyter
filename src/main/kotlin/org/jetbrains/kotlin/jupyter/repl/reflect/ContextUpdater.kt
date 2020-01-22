@@ -1,5 +1,6 @@
 package org.jetbrains.kotlin.jupyter.repl.reflect
 
+import jupyter.kotlin.KotlinContext
 import jupyter.kotlin.KotlinFunctionInfo
 import jupyter.kotlin.KotlinVariableInfo
 import org.jetbrains.kotlin.cli.common.repl.AggregatedReplStageState
