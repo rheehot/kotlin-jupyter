@@ -1,13 +1,17 @@
 package org.jetbrains.kotlin.jupyter
 
 import com.beust.klaxon.JsonObject
-import jupyter.kotlin.KotlinKernelVersion.Companion.toMaybeUnspecifiedString
-import jupyter.kotlin.MimeTypedResult
-import jupyter.kotlin.textResult
 import kotlinx.coroutines.GlobalScope
 import kotlinx.coroutines.launch
 import org.jetbrains.annotations.TestOnly
 import org.jetbrains.kotlin.config.KotlinCompilerVersion
+import org.jetbrains.kotlin.jupyter.api.DisplayResult
+import org.jetbrains.kotlin.jupyter.api.KotlinKernelVersion.Companion.toMaybeUnspecifiedString
+import org.jetbrains.kotlin.jupyter.api.Notebook
+import org.jetbrains.kotlin.jupyter.api.Renderable
+import org.jetbrains.kotlin.jupyter.api.setDisplayId
+import org.jetbrains.kotlin.jupyter.api.textResult
+import org.jetbrains.kotlin.jupyter.api.toJson
 import java.io.ByteArrayOutputStream
 import java.io.OutputStream
 import java.io.PrintStream
@@ -50,6 +54,42 @@ class OkResponseWithMessage(
         stdOut: String? = null,
         stdErr: String? = null,
 ): Response(stdOut, stdErr){
+interface DisplayHandler {
+    fun handleDisplay(value: Any)
+    fun handleUpdate(value: Any, id: String? = null)
+}
+
+class SocketDisplayHandler(
+        private val socket: JupyterConnection.Socket,
+        private val notebook: Notebook<*>,
+        private val message: Message,
+) : DisplayHandler {
+    override fun handleDisplay(value: Any) {
+        val display = value.toDisplayResult(notebook)
+        val json = display.toJson()
+
+        socket.send(makeReplyMessage(message,
+                "display_data",
+                content = json))
+    }
+
+    override fun handleUpdate(value: Any, id: String?) {
+        val display = value.toDisplayResult(notebook)
+        val json = display.toJson()
+
+        json.setDisplayId(id) ?: throw ReplEvalRuntimeException("`update_display_data` response should provide an id of data being updated")
+
+        socket.send(makeReplyMessage(message,
+                "update_display_data",
+                content = json))
+    }
+}
+
+data class OkResponseWithMessage(
+        val result: DisplayResult?,
+        override val stdOut: String? = null,
+        override val stdErr: String? = null,
+): Response{
     override val state: ResponseState = ResponseState.Ok
 
     override fun sendBody(socket: JupyterConnection.Socket, requestCount: Long, requestMsg: Message, startedTime: String) {
@@ -176,15 +216,7 @@ fun JupyterConnection.Socket.shellMessagesHandler(msg: Message, repl: ReplForJup
             val count = executionCount.getAndIncrement()
             val startedTime = ISO8601DateNow
 
-            fun displayHandler(value: Any) {
-                val res = value.toMimeTypedResult()
-                connection.iopub.send(makeReplyMessage(msg,
-                        "display_data",
-                        content = jsonObject(
-                                "data" to res,
-                                "metadata" to jsonObject()
-                        )))
-            }
+            val displayHandler = SocketDisplayHandler(connection.iopub, repl.notebook, msg)
 
             connection.iopub.sendStatus("busy", msg)
             val code = msg.content["code"]
@@ -194,8 +226,8 @@ fun JupyterConnection.Socket.shellMessagesHandler(msg: Message, repl: ReplForJup
             val res: Response = if (isCommand(code.toString())) {
                 runCommand(code.toString(), repl)
             } else {
-                connection.evalWithIO(repl.outputConfig, msg) {
-                    repl.eval(code.toString(), ::displayHandler, count.toInt())
+                connection.evalWithIO(repl, msg) {
+                    repl.eval(code.toString(), displayHandler, count.toInt())
                 }
             }
 
@@ -316,21 +348,26 @@ class CapturingOutputStream(
     }
 }
 
-fun Any.toMimeTypedResult(): MimeTypedResult? = when (this) {
-    is MimeTypedResult -> this
+fun Any.toDisplayResult(notebook: Notebook<*>): DisplayResult? = when (this) {
+    is DisplayResult -> this
+    is Renderable -> this.render(notebook)
     is Unit -> null
     else -> textResult(this.toString())
 }
 
-fun JupyterConnection.evalWithIO(config: OutputConfig, srcMessage: Message, body: () -> EvalResult?): Response {
+fun JupyterConnection.evalWithIO(repl: ReplForJupyter, srcMessage: Message, body: () -> EvalResult?): Response {
+    val config = repl.outputConfig
     val out = System.out
     val err = System.err
+    repl.notebook.beginEvalSession()
+    val cell = { repl.notebook.thisCell }
 
     fun getCapturingStream(stream: PrintStream, outType: JupyterOutType, captureOutput: Boolean): CapturingOutputStream {
         return CapturingOutputStream(
                 stream,
                 config,
                 captureOutput) { text ->
+            cell()?.appendStreamOutput(text)
             this.iopub.sendOut(srcMessage, outType, text)
         }
     }
@@ -347,16 +384,16 @@ fun JupyterConnection.evalWithIO(config: OutputConfig, srcMessage: Message, body
         return try {
             val exec = body()
             if (exec == null) {
-                AbortResponseWithMessage(textResult("Error!"), "NO REPL!")
+                AbortResponseWithMessage("NO REPL!")
             } else {
                 forkedOut.flush()
                 forkedError.flush()
 
                 try {
-                    val result = exec.resultValue?.toMimeTypedResult()
+                    val result = exec.resultValue?.toDisplayResult(repl.notebook)
                     OkResponseWithMessage(result, exec.newClasspath)
                 } catch (e: Exception) {
-                    AbortResponseWithMessage(textResult("Error!"), "error:  Unable to convert result to a string: $e")
+                    AbortResponseWithMessage("error:  Unable to convert result to a string: $e")
                 }
             }
         } catch (ex: ReplCompilerException) {
@@ -373,7 +410,6 @@ fun JupyterConnection.evalWithIO(config: OutputConfig, srcMessage: Message, body
             } ?: jsonObject()
 
             ErrorResponseWithMessage(
-                    textResult("Error!"),
                     ex.message,
                     ex.javaClass.canonicalName,
                     ex.message ?: "",
@@ -398,7 +434,6 @@ fun JupyterConnection.evalWithIO(config: OutputConfig, srcMessage: Message, body
                 }
             }
             ErrorResponseWithMessage(
-                    textResult("Error!"),
                     stdErr.toString(),
                     ex.javaClass.canonicalName,
                     ex.message ?: "",

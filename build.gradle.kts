@@ -175,6 +175,7 @@ dependencies {
     testImplementation(kotlin("test"))
 
     implementation(project(":kotlin-jupyter-deps"))
+    implementation(project(":kotlin-jupyter-api"))
     implementation(project(":jupyter-lib"))
     implementation(kotlin("stdlib"))
     implementation(kotlin("reflect"))
@@ -204,6 +205,7 @@ dependencies {
     runtimeOnly("net.java.dev.jna:jna:5.4.0")
 
     deploy(project(":jupyter-lib"))
+    deploy(project(":kotlin-jupyter-api"))
     deploy(kotlin("script-runtime"))
 }
 
