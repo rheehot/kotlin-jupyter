@@ -1,7 +1,27 @@
 @file:Suppress("UnstableApiUsage")
 
 import org.jetbrains.kotlin.gradle.tasks.KotlinCompile
-import org.jetbrains.kotlin.jupyter.build.*
+import org.jetbrains.kotlin.jupyter.build.AllOptions
+import org.jetbrains.kotlin.jupyter.build.CondaCredentials
+import org.jetbrains.kotlin.jupyter.build.CondaTaskSpec
+import org.jetbrains.kotlin.jupyter.build.DistributionPackageSettings
+import org.jetbrains.kotlin.jupyter.build.ProjectWithOptionsImpl
+import org.jetbrains.kotlin.jupyter.build.PyPiTaskSpec
+import org.jetbrains.kotlin.jupyter.build.ReadmeGenerator
+import org.jetbrains.kotlin.jupyter.build.UploadTaskSpecs
+import org.jetbrains.kotlin.jupyter.build.createCleanTasks
+import org.jetbrains.kotlin.jupyter.build.createInstallTasks
+import org.jetbrains.kotlin.jupyter.build.detectVersion
+import org.jetbrains.kotlin.jupyter.build.getCurrentBranch
+import org.jetbrains.kotlin.jupyter.build.getCurrentCommitSha
+import org.jetbrains.kotlin.jupyter.build.getFlag
+import org.jetbrains.kotlin.jupyter.build.getSubDir
+import org.jetbrains.kotlin.jupyter.build.prepareCondaTasks
+import org.jetbrains.kotlin.jupyter.build.prepareDistributionTasks
+import org.jetbrains.kotlin.jupyter.build.prepareLocalTasks
+import org.jetbrains.kotlin.jupyter.build.preparePyPiTasks
+import org.jetbrains.kotlin.jupyter.build.readProperties
+import org.jetbrains.kotlin.jupyter.build.stringPropOrEmpty
 import java.nio.file.Path
 import java.nio.file.Paths
 
@@ -14,9 +34,10 @@ plugins {
     kotlin("jvm")
     id("com.github.johnrengelman.shadow")
     id("org.jetbrains.kotlin.jupyter.dependencies")
+    id("org.jlleitschuh.gradle.ktlint")
 }
 
-class TaskOptions: AllOptions {
+class TaskOptions : AllOptions {
     override val versionFileName = "VERSION"
     override val rootPath: Path = rootDir.toPath()
 
@@ -26,8 +47,9 @@ class TaskOptions: AllOptions {
         val artifactsPathStr = rootProject.findProperty("artifactsPath") as? String ?: "artifacts"
         val artifactsDir = rootPath.resolve(artifactsPathStr)
 
-        if (isLocalBuild)
+        if (isLocalBuild) {
             project.delete(artifactsDir)
+        }
 
         project.version = detectVersion(baseVersion, artifactsDir, versionFileName)
         println("##teamcity[buildNumber '$version']")
@@ -40,10 +62,8 @@ class TaskOptions: AllOptions {
     override val librariesPath = "libraries"
     override val librariesPropertiesPath: Path = rootPath.resolve(librariesPath).resolve(".properties")
 
-    override val installPathLocal: Path = if (installPath != null)
-        Paths.get(installPath)
-    else
-        Paths.get(System.getProperty("user.home").toString(), ".ipython", "kernels", "kotlin")
+    override val installPathLocal: Path = if (installPath != null) Paths.get(installPath)
+    else Paths.get(System.getProperty("user.home").toString(), ".ipython", "kernels", "kotlin")
 
     override val resourcesDir = "resources"
     override val distribBuildPath: Path = rootPath.resolve("build").resolve("distrib-build")
@@ -103,20 +123,22 @@ class TaskOptions: AllOptions {
         val condaPackageSettings = object : DistributionPackageSettings {
             override val dir = "conda-package"
             override val name = packageName
-            override val fileName by lazy {"$name-${version}-py_0.tar.bz2"}
+            override val fileName by lazy { "$name-$version-py_0.tar.bz2" }
         }
 
         val condaCredentials = CondaCredentials(condaUserStable, condaPasswordStable)
         UploadTaskSpecs(
-                condaPackageSettings,"conda", condaGroup,
-                CondaTaskSpec(
-                        condaUserStable,
-                        condaCredentials
-                ),
-                CondaTaskSpec(
-                        condaUserDev,
-                        condaCredentials
-                )
+            condaPackageSettings,
+            "conda",
+            condaGroup,
+            CondaTaskSpec(
+                condaUserStable,
+                condaCredentials
+            ),
+            CondaTaskSpec(
+                condaUserDev,
+                condaCredentials
+            )
         )
     }()
 
@@ -129,24 +151,25 @@ class TaskOptions: AllOptions {
         val pyPiPackageSettings = object : DistributionPackageSettings {
             override val dir = "pip-package"
             override val name = packageName.replace("-", "_")
-            override val fileName by lazy {"$name-${version}-py3-none-any.whl"}
+            override val fileName by lazy { "$name-$version-py3-none-any.whl" }
         }
 
         UploadTaskSpecs(
-                pyPiPackageSettings, "pyPi", pyPiGroup,
-                PyPiTaskSpec(
-                        "https://upload.pypi.org/legacy/",
-                        stablePyPiUser,
-                        stablePyPiPassword
-                ),
-                PyPiTaskSpec(
-                        "https://test.pypi.org/legacy/",
-                        devPyPiUser,
-                        devPyPiPassword
-                )
+            pyPiPackageSettings,
+            "pyPi",
+            pyPiGroup,
+            PyPiTaskSpec(
+                "https://upload.pypi.org/legacy/",
+                stablePyPiUser,
+                stablePyPiPassword
+            ),
+            PyPiTaskSpec(
+                "https://test.pypi.org/legacy/",
+                devPyPiUser,
+                devPyPiPassword
+            )
         )
     }()
-
 }
 
 allprojects {
@@ -248,11 +271,11 @@ with(ProjectWithOptionsImpl(project, TaskOptions())) {
         }
 
         systemProperties = mutableMapOf(
-                "junit.jupiter.displayname.generator.default" to "org.junit.jupiter.api.DisplayNameGenerator\$ReplaceUnderscores",
+            "junit.jupiter.displayname.generator.default" to "org.junit.jupiter.api.DisplayNameGenerator\$ReplaceUnderscores",
 
-                "junit.jupiter.execution.parallel.enabled" to doParallelTesting.toString() as Any,
-                "junit.jupiter.execution.parallel.mode.default" to "concurrent",
-                "junit.jupiter.execution.parallel.mode.classes.default" to "concurrent"
+            "junit.jupiter.execution.parallel.enabled" to doParallelTesting.toString() as Any,
+            "junit.jupiter.execution.parallel.mode.default" to "concurrent",
+            "junit.jupiter.execution.parallel.mode.classes.default" to "concurrent"
         )
     }
 
@@ -263,8 +286,10 @@ with(ProjectWithOptionsImpl(project, TaskOptions())) {
         inputs.property("version", version)
         inputs.property("currentBranch", getCurrentBranch())
         inputs.property("currentSha", getCurrentCommitSha())
-        inputs.property("jvmTargetForSnippets",
-                rootProject.findProperty("jvmTargetForSnippets") ?: "1.8")
+        inputs.property(
+            "jvmTargetForSnippets",
+            rootProject.findProperty("jvmTargetForSnippets") ?: "1.8"
+        )
         inputs.file(librariesPropertiesPath)
 
         outputs.dir(outputDir)
@@ -273,7 +298,7 @@ with(ProjectWithOptionsImpl(project, TaskOptions())) {
             outputDir.mkdirs()
             val propertiesFile = file(getSubDir(outputDir.toPath(), runtimePropertiesFile))
 
-            val properties = inputs.properties.entries.map{ it.toPair() }.toMutableList()
+            val properties = inputs.properties.entries.map { it.toPair() }.toMutableList()
             properties.apply {
                 val librariesProperties = readProperties(librariesPropertiesPath)
                 add("librariesFormatVersion" to librariesProperties["formatVersion"])
@@ -317,7 +342,7 @@ with(ProjectWithOptionsImpl(project, TaskOptions())) {
             val tempFile = createTempFile("kotlin-jupyter-readme")
             tempFile.deleteOnExit()
             readmeGenerator.generate(readmeStubFile, tempFile)
-            if(tempFile.readText() != readmeFile.readText()) {
+            if (tempFile.readText() != readmeFile.readText()) {
                 throw AssertionError("Readme is not regenerated. Regenerate it using `./gradlew ${generateReadme.name}` command")
             }
         }
