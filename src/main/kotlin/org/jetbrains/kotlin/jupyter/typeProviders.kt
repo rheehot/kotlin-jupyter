@@ -82,9 +82,11 @@ class TypeProvidersProcessorImpl(private val contextUpdater: ContextUpdater) : T
 
         if (methodIdMap.isNotEmpty()) {
             contextUpdater.update()
-            handlers.putAll(methodIdMap.map {
-                toRegex(it.key) to contextUpdater.context.functions[getMethodName(it.value)]!!
-            })
+            handlers.putAll(
+                methodIdMap.map {
+                    toRegex(it.key) to contextUpdater.context.functions[getMethodName(it.value)]!!
+                }
+            )
             methodIdMap.clear()
         }
 
@@ -132,16 +134,16 @@ class TypeProvidersProcessorImpl(private val contextUpdater: ContextUpdater) : T
         if (conversionCodes.isNotEmpty()) {
             val initCode = initCodes.joinToLines()
             val tempFieldsCode = conversionCodes
-                    .map { "val $tempFieldPrefix${it.key.name} = ${it.key.name}" }
-                    .joinToLines()
+                .map { "val $tempFieldPrefix${it.key.name} = ${it.key.name}" }
+                .joinToLines()
 
             val newFieldsCode = conversionCodes
-                    .mapValues { it.value.replace(variablePlaceholder, "$tempFieldPrefix${it.key.name}") }
-                    .map {
-                        val valOrVar = if (it.key is KMutableProperty) "var" else "val"
-                        "$valOrVar ${it.key.name} = ${it.value}"
-                    }
-                    .joinToLines()
+                .mapValues { it.value.replace(variablePlaceholder, "$tempFieldPrefix${it.key.name}") }
+                .map {
+                    val valOrVar = if (it.key is KMutableProperty) "var" else "val"
+                    "$valOrVar ${it.key.name} = ${it.value}"
+                }
+                .joinToLines()
 
             return listOf("$initCode\n$tempFieldsCode", newFieldsCode)
         }

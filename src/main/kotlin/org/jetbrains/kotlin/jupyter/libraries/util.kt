@@ -6,12 +6,12 @@ import org.jetbrains.kotlin.jupyter.GitHubApiPrefix
 import org.jetbrains.kotlin.jupyter.LibrariesDir
 import org.jetbrains.kotlin.jupyter.LibraryDescriptor
 import org.jetbrains.kotlin.jupyter.ReplCompilerException
-import org.jetbrains.kotlin.jupyter.api.TypeHandler
 import org.jetbrains.kotlin.jupyter.Variable
 import org.jetbrains.kotlin.jupyter.api.Code
 import org.jetbrains.kotlin.jupyter.api.LibraryDefinition
 import org.jetbrains.kotlin.jupyter.api.LibraryDefinitionProducer
 import org.jetbrains.kotlin.jupyter.api.Notebook
+import org.jetbrains.kotlin.jupyter.api.TypeHandler
 import org.jetbrains.kotlin.jupyter.catchAll
 import org.jetbrains.kotlin.jupyter.getHttp
 import org.jetbrains.kotlin.jupyter.log
@@ -21,8 +21,8 @@ import kotlin.script.experimental.api.ResultWithDiagnostics
 import kotlin.script.experimental.api.ScriptDiagnostic
 
 sealed class Parameter(val name: String, open val default: String?) {
-    class Required(name: String): Parameter(name, null)
-    class Optional(name: String, override val default: String): Parameter(name, default)
+    class Required(name: String) : Parameter(name, null)
+    class Optional(name: String, override val default: String) : Parameter(name, default)
 }
 
 class Brackets(val open: Char, val close: Char) {
@@ -51,7 +51,7 @@ class LibraryFactoryDefaultInfoSwitcher<T>(private val infoProvider: ResolutionI
             val dirInfo = if (initialInfo is LibraryResolutionInfo.ByDir) initialInfo else LibraryResolutionInfo.ByDir(defaultDir)
             val refInfo = if (initialInfo is LibraryResolutionInfo.ByGitRef) initialInfo else LibraryResolutionInfo.getInfoByRef(defaultRef)
             return LibraryFactoryDefaultInfoSwitcher(provider, DefaultInfoSwitch.DIRECTORY) { switch ->
-                when(switch) {
+                when (switch) {
                     DefaultInfoSwitch.DIRECTORY -> dirInfo
                     DefaultInfoSwitch.GIT_REFERENCE -> refInfo
                 }
@@ -75,8 +75,8 @@ fun parseCall(str: String, brackets: Brackets): Pair<String, List<Variable>> {
     if (openBracketIndex == -1) return str.trim() to emptyList()
     val name = str.substring(0, openBracketIndex).trim()
     val args = str.substring(openBracketIndex + 1, str.indexOf(brackets.close, openBracketIndex))
-            .split(',')
-            .map(::parseLibraryArgument)
+        .split(',')
+        .map(::parseLibraryArgument)
     return name to args
 }
 
@@ -85,26 +85,26 @@ fun parseLibraryName(str: String): Pair<String, List<Variable>> {
 }
 
 fun getLatestCommitToLibraries(ref: String, sinceTimestamp: String?): Pair<String, String>? =
-        log.catchAll {
-            var url = "$GitHubApiPrefix/commits?path=$LibrariesDir&sha=$ref"
+    log.catchAll {
+        var url = "$GitHubApiPrefix/commits?path=$LibrariesDir&sha=$ref"
+        if (sinceTimestamp != null)
+            url += "&since=$sinceTimestamp"
+        log.info("Checking for new commits to library descriptors at $url")
+        val arr = getHttp(url).jsonArray
+        if (arr.length() == 0) {
             if (sinceTimestamp != null)
-                url += "&since=$sinceTimestamp"
-            log.info("Checking for new commits to library descriptors at $url")
-            val arr = getHttp(url).jsonArray
-            if (arr.length() == 0) {
-                if (sinceTimestamp != null)
-                    getLatestCommitToLibraries(ref, null)
-                else {
-                    log.info("Didn't find any commits to '$LibrariesDir' at $url")
-                    null
-                }
-            } else {
-                val commit = arr[0] as JSONObject
-                val sha = commit["sha"] as String
-                val timestamp = ((commit["commit"] as JSONObject)["committer"] as JSONObject)["date"] as String
-                sha to timestamp
+                getLatestCommitToLibraries(ref, null)
+            else {
+                log.info("Didn't find any commits to '$LibrariesDir' at $url")
+                null
             }
+        } else {
+            val commit = arr[0] as JSONObject
+            val sha = commit["sha"] as String
+            val timestamp = ((commit["commit"] as JSONObject)["committer"] as JSONObject)["date"] as String
+            sha to timestamp
         }
+    }
 
 fun parseLibraryDescriptor(json: String): LibraryDescriptor {
     val jsonParser = Parser.default()
@@ -116,28 +116,28 @@ fun parseLibraryDescriptor(json: String): LibraryDescriptor {
 
 fun parseLibraryDescriptor(json: JsonObject): LibraryDescriptor {
     return LibraryDescriptor(
-            originalJson = json,
-            libraryDefinitions = json.array<String>("libraryDefinitions")?.toList().orEmpty(),
-            dependencies = json.array<String>("dependencies")?.toList().orEmpty(),
-            variables = json.obj("properties")?.map { Variable(it.key, it.value.toString()) }.orEmpty(),
-            imports = json.array<String>("imports")?.toList().orEmpty(),
-            repositories = json.array<String>("repositories")?.toList().orEmpty(),
-            init = json.array<String>("init")?.toList().orEmpty(),
-            shutdown = json.array<String>("shutdown")?.toList().orEmpty(),
-            initCell = json.array<String>("initCell")?.toList().orEmpty(),
-            renderers = json.obj("renderers")?.map { TypeHandler(it.key, it.value.toString()) }?.toList().orEmpty(),
-            link = json.string("link"),
-            description = json.string("description"),
-            minKernelVersion = json.string("minKernelVersion"),
-            converters = json.obj("typeConverters")?.map { TypeHandler(it.key, it.value.toString()) }.orEmpty(),
-            annotations = json.obj("annotationHandlers")?.map { TypeHandler(it.key, it.value.toString()) }.orEmpty()
+        originalJson = json,
+        libraryDefinitions = json.array<String>("libraryDefinitions")?.toList().orEmpty(),
+        dependencies = json.array<String>("dependencies")?.toList().orEmpty(),
+        variables = json.obj("properties")?.map { Variable(it.key, it.value.toString()) }.orEmpty(),
+        imports = json.array<String>("imports")?.toList().orEmpty(),
+        repositories = json.array<String>("repositories")?.toList().orEmpty(),
+        init = json.array<String>("init")?.toList().orEmpty(),
+        shutdown = json.array<String>("shutdown")?.toList().orEmpty(),
+        initCell = json.array<String>("initCell")?.toList().orEmpty(),
+        renderers = json.obj("renderers")?.map { TypeHandler(it.key, it.value.toString()) }?.toList().orEmpty(),
+        link = json.string("link"),
+        description = json.string("description"),
+        minKernelVersion = json.string("minKernelVersion"),
+        converters = json.obj("typeConverters")?.map { TypeHandler(it.key, it.value.toString()) }.orEmpty(),
+        annotations = json.obj("annotationHandlers")?.map { TypeHandler(it.key, it.value.toString()) }.orEmpty()
     )
 }
 
 fun replaceVariables(str: String, mapping: Map<String, String>) =
-        mapping.asSequence().fold(str) { s, template ->
-            s.replace("\$${template.key}", template.value)
-        }
+    mapping.asSequence().fold(str) { s, template ->
+        s.replace("\$${template.key}", template.value)
+    }
 
 fun List<String>.replaceVariables(mapping: Map<String, String>) = map { replaceVariables(it, mapping) }
 
@@ -148,13 +148,13 @@ fun parseLibraryDescriptors(libJsons: Map<String, JsonObject>): Map<String, Libr
     }
 }
 
-class TrivialLibraryDefinitionProducer(private val library: LibraryDefinition): LibraryDefinitionProducer {
+class TrivialLibraryDefinitionProducer(private val library: LibraryDefinition) : LibraryDefinitionProducer {
     override fun getDefinitions(notebook: Notebook<*>?): List<LibraryDefinition> {
         return listOf(library)
     }
 }
 
-class ResolvingLibraryDefinitionProducer(private val initCodes: List<Code>, private val codes: List<Code>): LibraryDefinitionProducer {
+class ResolvingLibraryDefinitionProducer(private val initCodes: List<Code>, private val codes: List<Code>) : LibraryDefinitionProducer {
     override fun getDefinitions(notebook: Notebook<*>?): List<LibraryDefinition> {
         if (notebook == null) return emptyList()
 
@@ -162,7 +162,7 @@ class ResolvingLibraryDefinitionProducer(private val initCodes: List<Code>, priv
 
         val definitions = mutableListOf<LibraryDefinition>()
         for (code in codes) {
-            when(val result = notebook.host.execute(code)) {
+            when (val result = notebook.host.execute(code)) {
                 is LibraryDefinition -> definitions.add(result)
                 is LibraryDefinitionProducer -> {
                     val produced = result.getDefinitions(notebook)
@@ -172,7 +172,6 @@ class ResolvingLibraryDefinitionProducer(private val initCodes: List<Code>, priv
         }
         return definitions
     }
-
 }
 
 fun List<LibraryDefinitionProducer>.getDefinitions(notebook: Notebook<*>?): List<LibraryDefinition> {

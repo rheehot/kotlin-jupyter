@@ -1,18 +1,18 @@
 package org.jetbrains.kotlin.jupyter.libraries
 
-import org.jetbrains.kotlin.jupyter.api.KotlinKernelVersion
-import org.jetbrains.kotlin.jupyter.api.LibraryDefinition
 import org.jetbrains.kotlin.jupyter.LibraryDescriptor
 import org.jetbrains.kotlin.jupyter.ReplCompilerException
 import org.jetbrains.kotlin.jupyter.ReplRuntimeProperties
 import org.jetbrains.kotlin.jupyter.Variable
+import org.jetbrains.kotlin.jupyter.api.KotlinKernelVersion
+import org.jetbrains.kotlin.jupyter.api.LibraryDefinition
 import org.jetbrains.kotlin.jupyter.api.LibraryDefinitionProducer
 import org.jetbrains.kotlin.jupyter.api.TypeHandler
 
 class LibrariesProcessor(
-        private val libraries: LibraryResolver?,
-        private val runtimeProperties: ReplRuntimeProperties,
-        val libraryFactory: LibraryFactory,
+    private val libraries: LibraryResolver?,
+    private val runtimeProperties: ReplRuntimeProperties,
+    val libraryFactory: LibraryFactory,
 ) {
 
     /**
@@ -47,7 +47,8 @@ class LibrariesProcessor(
     private fun processDescriptor(library: LibraryDescriptor, mapping: Map<String, String>): LibraryDefinitionProducer {
         val definitionCodes = library.libraryDefinitions
         return if (definitionCodes.isEmpty()) {
-            TrivialLibraryDefinitionProducer(LibraryDefinition(
+            TrivialLibraryDefinitionProducer(
+                LibraryDefinition(
                     dependencies = library.dependencies.replaceVariables(mapping),
                     repositories = library.repositories.replaceVariables(mapping),
                     imports = library.imports.replaceVariables(mapping),
@@ -57,7 +58,8 @@ class LibrariesProcessor(
                     renderers = library.renderers.map { TypeHandler(it.className, replaceVariables(it.code, mapping)) },
                     converters = library.converters.map { TypeHandler(it.className, replaceVariables(it.code, mapping)) },
                     annotations = library.annotations.map { TypeHandler(it.className, replaceVariables(it.code, mapping)) }
-            ))
+                )
+            )
         } else {
             val initCodes = library.buildDependenciesInitCode(mapping)?.let { listOf(it) } ?: emptyList()
             ResolvingLibraryDefinitionProducer(initCodes, definitionCodes)
@@ -100,7 +102,7 @@ class LibrariesProcessor(
     private fun checkKernelVersionRequirements(name: String, library: LibraryDescriptor) {
         library.minKernelVersion?.let { minVersionStr ->
             val minVersion = KotlinKernelVersion.from(minVersionStr)
-                    ?: throw ReplCompilerException("Wrong format of minimal kernel version for library '$name': $minVersionStr")
+                ?: throw ReplCompilerException("Wrong format of minimal kernel version for library '$name': $minVersionStr")
             runtimeProperties.version?.let { currentVersion ->
                 if (currentVersion < minVersion) {
                     throw ReplCompilerException("Library '$name' requires at least $minVersion version of kernel. Current kernel version is $currentVersion. Please update kernel")
@@ -110,14 +112,14 @@ class LibrariesProcessor(
     }
 
     fun processNewLibraries(arg: String) =
-            splitLibraryCalls(arg).map {
-                val (libRef, vars) = libraryFactory.parseReferenceWithArgs(it)
-                val library = libraries?.resolve(libRef)
-                        ?: throw ReplCompilerException("Unknown library '$libRef'")
-                checkKernelVersionRequirements(libRef.toString(), library)
+        splitLibraryCalls(arg).map {
+            val (libRef, vars) = libraryFactory.parseReferenceWithArgs(it)
+            val library = libraries?.resolve(libRef)
+                ?: throw ReplCompilerException("Unknown library '$libRef'")
+            checkKernelVersionRequirements(libRef.toString(), library)
 
-                val mapping = substituteArguments(library.variables, vars)
+            val mapping = substituteArguments(library.variables, vars)
 
-                processDescriptor(library, mapping)
-            }
+            processDescriptor(library, mapping)
+        }
 }
